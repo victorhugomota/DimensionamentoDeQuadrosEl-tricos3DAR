@@ -56,6 +56,18 @@ Depois disso: novos usuários usam **Solicitar acesso** na tela de login; o pedi
 - `quadros/{id}` — dados de entrada do quadro, resumo e memorial de cálculo.
 - `calculos/{id}` — cálculos avulsos salvos no histórico.
 
+## Publicação
+
+O GitHub Pages deste repositório publica o branch **`gh-pages`**. Para colocar no ar o que está
+no `main`:
+
+```bash
+git push origin main main:gh-pages
+```
+
+Para publicar direto do `main` (sem o segundo branch), troque a origem em
+*Settings → Pages → Build and deployment → Branch* para `main` / `(root)`.
+
 ## Desenvolvimento
 
 Site estático, sem etapa de build (HTML + CSS + módulos ES).

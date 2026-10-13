@@ -452,7 +452,7 @@ function renderCalculos() {
   const campos = c.campos.filter((f) => !f.se || f.se(valores)).map((f) => campo(
     f.rotulo + (f.unidade ? ` <em>(${h(f.unidade)})</em>` : ""),
     f.tipo === "sel" ? `<select data-calc="${f.id}">${opcoes(f.opcoes, valores[f.id])}</select>` : numero(`data-calc="${f.id}"`, valores[f.id], f.passo ? `step="${f.passo}"` : ""),
-    f.largo ? "largo" : "")).join("");
+    `${f.largo ? "largo" : ""} ${f.quebra ? "quebra" : ""}`)).join("");
   $("aba-calculos").innerHTML = `
     <div class="calc-layout">
       <nav class="calc-menu" aria-label="Calculadoras">
@@ -545,7 +545,7 @@ async function apagarMemorial(quadroId, indices) {
 
 // Entradas de uma calculadora em pares {rótulo, valor formatado}, só dos campos visíveis.
 function entradasDe(c, valores) {
-  return c.campos.filter((f) => !f.se || f.se(valores)).map((f) => {
+  return c.campos.filter((f) => (!f.se || f.se(valores)) && (!f.relatorio || f.relatorio(valores))).map((f) => {
     const v = valores[f.id];
     const texto = f.tipo === "sel" ? f.opcoes.find(([o]) => String(o) === String(v))?.[1] ?? v : `${fmt(v, 3)}${f.unidade ? " " + f.unidade : ""}`;
     return { k: f.rotulo, v: String(texto) };
@@ -810,11 +810,19 @@ function prepararEventos() {
     if (!el) return;
     S.calcValores[S.calcId][el.dataset.calc] = el.value;
     const def = CALCULADORAS.find((x) => x.id === S.calcId).campos.find((f) => f.id === el.dataset.calc);
-    if (def?.rerender) return renderCalculos(); // campos dependentes aparecem/somem
+    if (def?.rerender && el.tagName === "SELECT") return renderCalculos(); // campos dependentes aparecem/somem
     renderResultadoCalc();
   });
   $("aba-calculos").addEventListener("change", (ev) => {
     if (ev.target.id === "filtroHist") { S.filtroHist = ev.target.value; renderHistorico(); }
+    // Campo numérico que libera outros campos: redesenha ao sair dele, mantendo o foco onde o usuário foi.
+    const el = ev.target.closest("input[data-calc]");
+    const def = el && CALCULADORAS.find((x) => x.id === S.calcId).campos.find((f) => f.id === el.dataset.calc);
+    if (def?.rerender) setTimeout(() => {
+      const foco = document.activeElement?.dataset?.calc;
+      renderCalculos();
+      if (foco) document.querySelector(`[data-calc="${foco}"]`)?.focus();
+    });
   });
 }
 

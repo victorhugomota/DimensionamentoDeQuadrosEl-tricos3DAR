@@ -88,6 +88,8 @@ input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--primaria
 .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px 14px; align-items: end; }
 .grade .largo { grid-column: span 2; }
 .grade.uma { grid-template-columns: 1fr; }
+.grade .quebra { grid-column-start: 1; }
+.grade .largo.quebra { grid-column: 1 / span 2; }
 .marcas { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 14px 0 4px; align-items: center; }
 .marcas select { width: auto; }
 .marca { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; cursor: pointer; }

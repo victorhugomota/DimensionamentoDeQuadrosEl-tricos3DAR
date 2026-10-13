@@ -14,6 +14,8 @@ const data = (iso) => (iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const pares = (o) => (Array.isArray(o) ? o : Object.entries(o ?? {}).map(([k, v]) => ({ k, v: String(v) })));
 
+const TITULO_PAGINA = document.title;
+
 const S = {
   usuario: null, quadros: [], calculos: [], usuarios: [], aba: "quadros",
   quadro: null, resultado: null, equip: null, equipIndice: null,
@@ -464,7 +466,8 @@ function renderCalculos() {
           <div class="salvar-calc">
             ${campo("Descrição (opcional)", entrada('id="calcDescricao"', "", "text", 'placeholder="Ex.: alimentador da bomba BAG-02"'), "largo")}
             ${campo("Vincular a", `<select id="calcQuadro"><option value="">Cálculo avulso</option>${S.quadros.map((q) => `<option value="${h(q.id)}">${h(q.nome)}</option>`).join("")}</select>`)}
-            <button type="button" class="btn btn-primario" data-acao="salvar-calc">Salvar no histórico</button>
+            <span class="acoes"><button type="button" class="btn" data-acao="pdf-calc">Exportar PDF</button>
+            <button type="button" class="btn btn-primario" data-acao="salvar-calc">Salvar no histórico</button></span>
           </div>
         </div>
         <div class="cartao">
@@ -518,10 +521,11 @@ function renderHistorico() {
   filtro.innerHTML = opcoes([["todos", "Todos"], ["avulsos", "Somente avulsos"], ...S.quadros.map((q) => [q.id, `Quadro ${q.nome}`])], S.filtroHist);
   const itens = [...salvos, ...doQuadro].filter((i) => S.filtroHist === "todos" || (S.filtroHist === "avulsos" ? i.origem === "avulso" : i.quadroId === S.filtroHist))
     .sort((a, b) => (b.quando ?? "").localeCompare(a.quando ?? "")).slice(0, 300);
-  $("historico").innerHTML = itens.length ? itens.map((i) => `
+  $("historico").innerHTML = itens.length ? itens.map((i, n) => `
     <details><summary><span>${h(i.titulo)}</span>
       <span class="etiqueta ${i.origem}">${i.origem === "avulso" ? "Avulso" : h(i.quadroNome ?? "Quadro")}${i.origem === "quadro" ? " · automático" : ""}</span>
       <span class="sub">${data(i.quando)}</span>
+      <button type="button" class="btn btn-pequeno" title="Exportar este cálculo em PDF" data-acao="pdf-hist" data-i="${n}">PDF</button>
       <button type="button" class="btn btn-pequeno btn-perigo" title="Apagar este cálculo" aria-label="Apagar este cálculo" ${i.origem === "quadro" ? `data-acao="excluir-memorial" data-id="${h(i.quadroId)}" data-i="${i.indice}"` : `data-acao="excluir-calc" data-id="${h(i.id)}"`}>✕</button></summary>
       <div class="memo"><div><h5>Entradas</h5>${tabelaPares(i.entradas)}</div><div><h5>Resultados</h5>${tabelaPares(i.resultados)}</div></div>
       <p class="sub">Referência: ${h(i.norma ?? "—")}${i.criadoPor ? ` · por ${h(i.criadoPor)}` : ""}</p>
@@ -539,19 +543,80 @@ async function apagarMemorial(quadroId, indices) {
   if (S.quadro?.id === quadroId) S.quadro.memorial = memorial;
 }
 
-async function salvarCalculo() {
-  const c = CALCULADORAS.find((x) => x.id === S.calcId), r = S.calcAtual;
-  if (!r?.linhas.length) return toast("Não há resultado para salvar.", "erro");
-  const rotulos = Object.fromEntries(c.campos.map((f) => [f.id, f]));
-  const entradas = Object.entries(r.valores).filter(([k]) => !rotulos[k].se || rotulos[k].se(r.valores)).map(([k, v]) => {
-    const f = rotulos[k];
+// Entradas de uma calculadora em pares {rótulo, valor formatado}, só dos campos visíveis.
+function entradasDe(c, valores) {
+  return c.campos.filter((f) => !f.se || f.se(valores)).map((f) => {
+    const v = valores[f.id];
     const texto = f.tipo === "sel" ? f.opcoes.find(([o]) => String(o) === String(v))?.[1] ?? v : `${fmt(v, 3)}${f.unidade ? " " + f.unidade : ""}`;
     return { k: f.rotulo, v: String(texto) };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Exportação de um cálculo em PDF (relatório montado e enviado à impressão)
+// ---------------------------------------------------------------------------
+function exportarPDF(item) {
+  // Com os valores brutos guardados, refaz o cálculo para trazer o passo a passo completo.
+  const calc = item.valores ? CALCULADORAS.find((x) => x.id === item.tipo) : null;
+  let detalhe = { alertas: item.alertas ?? [], passos: item.passos ?? [], memoria: item.memoria ?? [] };
+  let entradas = pares(item.entradas), resultados = pares(item.resultados);
+  if (calc) {
+    try {
+      const r = calcular(calc.id, item.valores);
+      detalhe = r;
+      if (item.origem !== "quadro") entradas = entradasDe(calc, r.valores);
+      if (!resultados.length) resultados = r.linhas.map(([k, v]) => ({ k, v: String(v) }));
+    } catch (e) { /* mantém o que estava salvo */ }
+  }
+  const origem = item.origem === "quadro" ? `Quadro ${item.quadroNome ?? ""} — cálculo automático` : item.quadroNome ? `Vinculado ao quadro ${item.quadroNome}` : "Cálculo avulso";
+  const linhas = (lista) => lista.map(({ k, v }, i) => `<tr class="${i === 0 && lista === resultados ? "destaque" : ""}"><th>${h(k)}</th><td>${h(v)}</td></tr>`).join("");
+  $("relatorio").innerHTML = `
+    <header class="rel-cab">
+      <img src="./assets/icone.svg" alt="" width="44" height="44">
+      <div><h1>${h(item.titulo)}</h1><p>Memória de cálculo — Dimensionamento de Quadros Elétricos · 3D Ar Condicionado</p></div>
+    </header>
+    <dl class="rel-meta">
+      <div><dt>Origem</dt><dd>${h(origem)}</dd></div>
+      <div><dt>Data do cálculo</dt><dd>${data(item.quando ?? store.agora())}</dd></div>
+      <div><dt>Responsável</dt><dd>${h(item.criadoPor ?? S.usuario?.nome ?? S.usuario?.email ?? "—")}</dd></div>
+      <div><dt>Emitido em</dt><dd>${data(store.agora())}</dd></div>
+    </dl>
+    <section class="rel-duas">
+      <div><h2>Dados de entrada</h2><table class="pares"><tbody>${linhas(entradas)}</tbody></table></div>
+      <div><h2>Resultados</h2><table class="pares"><tbody>${linhas(resultados)}</tbody></table></div>
+    </section>
+    ${detalhe.alertas?.length ? `<section><h2>Observações</h2>${detalhe.alertas.map((a) => `<p class="alerta">${h(a)}</p>`).join("")}</section>` : ""}
+    ${detalhe.memoria?.length ? `<section>${htmlMemoria(detalhe.memoria)}</section>` : ""}
+    ${detalhe.passos?.length ? `<section><h2>Fórmulas utilizadas</h2><p class="passos">${detalhe.passos.map(h).join("<br>")}</p></section>` : ""}
+    <section><h2>Referência normativa</h2><p>${h(item.norma ?? "—")}</p></section>
+    <footer class="rel-rodape">Resultado de pré-dimensionamento. Deve ser conferido e validado pelo responsável técnico, com as normas vigentes e os catálogos atualizados dos fabricantes.</footer>`;
+  document.title = `Calculo - ${item.titulo}`.replace(/[\\/:*?"<>|]/g, "-"); // vira o nome sugerido do arquivo PDF
+  document.body.classList.add("modo-relatorio");
+  const limpar = () => { document.body.classList.remove("modo-relatorio"); document.title = TITULO_PAGINA; window.removeEventListener("afterprint", limpar); };
+  window.addEventListener("afterprint", limpar);
+  window.print();
+}
+
+function pdfCalculoAtual() {
+  const c = CALCULADORAS.find((x) => x.id === S.calcId), r = S.calcAtual;
+  if (!r?.linhas.length) return toast("Não há resultado para exportar.", "erro");
+  const descricao = $("calcDescricao").value.trim();
+  const quadro = S.quadros.find((q) => q.id === $("calcQuadro").value);
+  exportarPDF({
+    tipo: c.id, titulo: descricao ? `${c.nome} — ${descricao}` : c.nome, norma: c.norma, valores: r.valores,
+    entradas: entradasDe(c, r.valores), resultados: r.linhas.map(([k, v]) => ({ k, v: String(v) })),
+    origem: quadro ? "vinculado" : "avulso", quadroNome: quadro?.nome
+  });
+}
+
+async function salvarCalculo() {
+  const c = CALCULADORAS.find((x) => x.id === S.calcId), r = S.calcAtual;
+  if (!r?.linhas.length) return toast("Não há resultado para salvar.", "erro");
+  const entradas = entradasDe(c, r.valores);
   const descricao = $("calcDescricao").value.trim();
   try {
     await store.salvar("calculos", null, {
-      tipo: c.id, titulo: descricao ? `${c.nome} — ${descricao}` : c.nome, norma: c.norma, entradas,
+      tipo: c.id, titulo: descricao ? `${c.nome} — ${descricao}` : c.nome, norma: c.norma, entradas, valores: r.valores,
       resultados: r.linhas.map(([k, v]) => ({ k, v: String(v) })), quadroId: $("calcQuadro").value || null,
       criadoPor: S.usuario.email, criadoEm: store.agora()
     });
@@ -662,6 +727,8 @@ const ACOES = {
   imprimir: () => window.print(),
   calc: (el) => { S.calcId = el.dataset.id; renderCalculos(); },
   "salvar-calc": salvarCalculo,
+  "pdf-calc": pdfCalculoAtual,
+  "pdf-hist": (el) => { const i = S.histVisivel?.[Number(el.dataset.i)]; if (i) exportarPDF(i); },
   "excluir-calc": async (el) => {
     if (!confirm("Excluir este cálculo do histórico?")) return;
     try { await store.remover("calculos", el.dataset.id); } catch (e) { toast(store.mensagemErro(e), "erro"); }

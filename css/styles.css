@@ -209,6 +209,7 @@ summary { cursor: pointer; font-weight: 600; }
 .calc-menu button.ativo { background: var(--superficie); border-color: var(--primaria); color: var(--primaria); font-weight: 700; }
 .resultado-calc { margin-top: 16px; border-top: 1px solid var(--borda); padding-top: 12px; }
 .passos { margin-top: 10px; font-family: Consolas, "Cascadia Mono", monospace; }
+.salvar-calc .acoes { flex-wrap: nowrap; }
 .salvar-calc { display: grid; grid-template-columns: 2fr 1fr auto; gap: 12px; align-items: end; margin-top: 16px; border-top: 1px solid var(--borda); padding-top: 14px; }
 
 /* ---------- memória de cálculo passo a passo ---------- */
@@ -266,7 +267,26 @@ summary { cursor: pointer; font-weight: 600; }
   .formula { grid-template-columns: 1fr; gap: 2px; }
 }
 
+/* ---------- relatório de cálculo (PDF) ---------- */
+#relatorio { display: none; }
+.rel-cab { display: flex; align-items: center; gap: 14px; border-bottom: 3px solid #0f4c81; padding-bottom: 10px; margin-bottom: 12px; }
+.rel-cab h1 { font-size: 1.5rem; }
+.rel-cab p { margin: 2px 0 0; color: var(--suave); }
+.rel-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 14px; }
+.rel-meta div { background: var(--superficie-2); border: 1px solid var(--borda); border-radius: 6px; padding: 6px 10px; }
+.rel-meta dt { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--suave); }
+.rel-meta dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.rel-duas { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+#relatorio h2 { font-size: 1rem; margin: 14px 0 6px; color: #0f4c81; }
+#relatorio .memoria-titulo { font-size: 1rem; color: #0f4c81; }
+.rel-rodape { margin-top: 18px; padding-top: 8px; border-top: 1px solid var(--borda); font-size: .8rem; color: var(--suave); text-align: center; }
+
 @media print {
+  body.modo-relatorio > *:not(#relatorio) { display: none !important; }
+  body.modo-relatorio #relatorio { display: block; font-size: 12px; }
+  body.modo-relatorio .passo, body.modo-relatorio .rel-duas > div, body.modo-relatorio tr { break-inside: avoid; }
+  body.modo-relatorio * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { margin: 14mm 12mm; }
   :root { --fundo: #fff; --superficie: #fff; --superficie-2: #f3f4f6; --texto: #000; --suave: #444; --borda: #bbb; --sombra: none; }
   .topo, .nao-imprimir, #toast, .dialogo { display: none !important; }
   .conteudo { max-width: none; padding: 0; }

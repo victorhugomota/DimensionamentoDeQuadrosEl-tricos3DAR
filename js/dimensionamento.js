@@ -268,6 +268,8 @@ export function dimensionar(quadroBruto) {
       if (cabo.excede) avisos.push(`${c.nome}: nenhuma seção até 300 mm² atende aos critérios — usar condutores em paralelo.`);
       memorial.push({
         tipo: "cabo", titulo: `Seção do cabo — ${c.nome}`, equipamento: c.nome, norma: `${REFERENCIAS.ampacidade}; ${REFERENCIAS.queda}`,
+        // estrela-triângulo usa corrente de queda própria: sem passo a passo automático
+        ...(yd ? {} : { valores: { modo: "corrente", corrente: ib, tensao: tensaoCirc, fases: fases === 3 ? 3 : 2, comprimento: c.distancia, cosfi, isolacao: q.isolacao, metodo: q.metodo, tempAmbiente: Number(q.tempAmbiente), agrupamento: agrup, quedaMax: Number(q.quedaMax), protecao: inProtecao } }),
         entradas: { "Corrente de projeto (A)": fmt(ib), "Tensão (V)": tensaoCirc, "Distância (m)": c.distancia, "Método": q.metodo, "Isolação": q.isolacao, "Temperatura (°C)": q.tempAmbiente, "Circuitos agrupados": agrup, "Queda máx. (%)": q.quedaMax, ...(yd ? { "Observação": "6 condutores, 0,58·In em cada" } : {}) },
         resultados: { "Seção adotada (mm²)": fmt(cabo.secao), "Critério determinante": cabo.criterio, "Iz corrigida (A)": fmt(cabo.iz, 1), "Fator k1 · k2": `${fmt(cabo.k1)} · ${fmt(cabo.k2)}`, "Queda de tensão (%)": fmt(cabo.quedaPct), "Condutor de proteção (mm²)": fmt(cabo.pe) }
       });
@@ -350,6 +352,7 @@ export function dimensionar(quadroBruto) {
     if (alimentador.excede) avisos.push(`Alimentador do quadro: ${fmt(correnteGeral)} A excede a capacidade de um cabo de 300 mm² — usar condutores em paralelo ou barramento blindado.`);
     memorial.push({
       tipo: "cabo", titulo: "Alimentador do quadro", equipamento: "Quadro", norma: `${REFERENCIAS.ampacidade}; ${REFERENCIAS.queda}`,
+      valores: { modo: "corrente", corrente: correnteGeral, tensao: V, fases: 3, comprimento: Number(q.distanciaAlimentador) || 0, cosfi: 0.85, isolacao: q.isolacao, metodo: q.metodo, tempAmbiente: Number(q.tempAmbiente), agrupamento: 1, quedaMax: Number(q.quedaMax), protecao: modo === "MSW" ? 0 : geral?.inom ?? 0 },
       entradas: { "Corrente (A)": fmt(correnteGeral), "Tensão (V)": V, "Distância (m)": q.distanciaAlimentador || 0, "Método": q.metodo, "Isolação": q.isolacao },
       resultados: { "Seção das fases (mm²)": fmt(alimentador.secao), "Critério": alimentador.criterio, "Iz corrigida (A)": fmt(alimentador.iz, 1), "Queda de tensão (%)": fmt(alimentador.quedaPct), "Condutor de proteção (mm²)": fmt(alimentador.pe) }
     });

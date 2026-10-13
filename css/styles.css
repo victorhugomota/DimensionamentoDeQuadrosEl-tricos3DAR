@@ -211,6 +211,34 @@ summary { cursor: pointer; font-weight: 600; }
 .passos { margin-top: 10px; font-family: Consolas, "Cascadia Mono", monospace; }
 .salvar-calc { display: grid; grid-template-columns: 2fr 1fr auto; gap: 12px; align-items: end; margin-top: 16px; border-top: 1px solid var(--borda); padding-top: 14px; }
 
+/* ---------- memória de cálculo passo a passo ---------- */
+.memoria-titulo { margin: 22px 0 10px; }
+.memoria { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.passo { border: 1px solid var(--borda); border-left: 4px solid var(--primaria); border-radius: 8px; padding: 12px 14px; background: var(--superficie-2); }
+.passo-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.passo-cab h4 { margin: 0; font-size: 1rem; flex: 1; min-width: 180px; }
+.passo-n { display: grid; place-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--primaria); color: var(--sobre-primaria); font-weight: 700; font-size: .85rem; flex: none; }
+.passo-texto { margin: 8px 0 10px; font-size: .9rem; color: var(--suave); }
+.formula { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: center; background: var(--superficie); border: 1px solid var(--borda); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-family: Cambria, "Cambria Math", Georgia, serif; font-size: 1.08rem; line-height: 2.1; overflow-x: auto; }
+.formula.subst { border-style: dashed; font-size: 1rem; }
+.formula-rotulo { font: 700 .72rem/1.3 "Segoe UI", system-ui, sans-serif; text-transform: uppercase; letter-spacing: .05em; color: var(--suave); }
+.formula small { font: .78rem "Segoe UI", system-ui, sans-serif; color: var(--suave); }
+.frac { display: inline-flex; flex-direction: column; text-align: center; vertical-align: middle; line-height: 1.35; margin: 0 4px; }
+.frac span:first-child { border-bottom: 1.5px solid currentColor; padding: 0 6px 1px; }
+.frac span:last-child { padding: 1px 6px 0; }
+.passo-resultado { margin: 4px 0; }
+.passo-resultado strong { font-size: 1.1rem; color: var(--primaria); }
+.chip { display: inline-block; padding: 1px 10px; border-radius: 20px; font: 700 .75rem/1.6 "Segoe UI", system-ui, sans-serif; white-space: nowrap; }
+.chip.ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.chip.nok { background: color-mix(in srgb, var(--perigo) 18%, transparent); color: var(--perigo); }
+.txt-nok { color: var(--perigo); font-weight: 700; }
+.comparacao { background: var(--superficie); border-radius: 8px; }
+.comparacao tr.adotada td { background: color-mix(in srgb, var(--primaria) 14%, transparent); font-weight: 600; }
+.barra-uso { display: inline-block; width: 110px; height: 9px; border-radius: 5px; background: var(--borda); overflow: hidden; vertical-align: middle; }
+.barra-uso i { display: block; height: 100%; }
+.barra-uso i.ok { background: var(--ok); }
+.barra-uso i.nok { background: var(--perigo); }
+
 /* ---------- administração ---------- */
 .solicitacao { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--borda); }
 
@@ -235,6 +263,7 @@ summary { cursor: pointer; font-weight: 600; }
   .salvar-calc { grid-template-columns: 1fr; }
   .grade .largo { grid-column: auto; }
   .definicoes div { grid-template-columns: 1fr; gap: 0; }
+  .formula { grid-template-columns: 1fr; gap: 2px; }
 }
 
 @media print {

@@ -447,7 +447,7 @@ function coletarEquip() {
 function renderCalculos() {
   const c = CALCULADORAS.find((x) => x.id === S.calcId);
   const valores = (S.calcValores[c.id] ??= Object.fromEntries(c.campos.map((f) => [f.id, f.padrao])));
-  const campos = c.campos.map((f) => campo(
+  const campos = c.campos.filter((f) => !f.se || f.se(valores)).map((f) => campo(
     f.rotulo + (f.unidade ? ` <em>(${h(f.unidade)})</em>` : ""),
     f.tipo === "sel" ? `<select data-calc="${f.id}">${opcoes(f.opcoes, valores[f.id])}</select>` : numero(`data-calc="${f.id}"`, valores[f.id], f.passo ? `step="${f.passo}"` : ""),
     f.largo ? "largo" : "")).join("");
@@ -489,8 +489,25 @@ function renderResultadoCalc() {
       ${r.linhas.length ? `<table class="pares">${r.linhas.map(([k, v, d]) => `<tr class="${d ? "destaque" : ""}"><th>${h(k)}</th><td>${h(v)}</td></tr>`).join("")}</table>` : ""}
       ${r.alertas.map((a) => `<p class="alerta">${h(a)}</p>`).join("")}
       ${r.passos.length ? `<p class="sub passos">${r.passos.map(h).join("<br>")}</p>` : ""}
+      ${r.memoria?.length ? htmlMemoria(r.memoria) : ""}
       <p class="sub">Referência: ${h(c.norma)}</p>
     </div>`;
+}
+
+// Memória de cálculo passo a passo. O HTML das fórmulas é montado em calc.js
+// apenas com textos fixos e números, nunca com texto digitado pelo usuário.
+function htmlMemoria(passos) {
+  return `<h3 class="memoria-titulo">Como o resultado foi calculado</h3><ol class="memoria">${passos.map((p, i) => `
+    <li class="passo">
+      <div class="passo-cab"><span class="passo-n">${i + 1}</span><h4>${h(p.titulo)}</h4>
+        ${p.ok === undefined ? "" : `<span class="chip ${p.ok ? "ok" : "nok"}">${p.ok ? "atende" : "não atende"}</span>`}</div>
+      <p class="passo-texto">${p.texto}</p>
+      ${p.formula ? `<div class="formula"><span class="formula-rotulo">Fórmula</span><div>${p.formula}</div></div>` : ""}
+      ${p.subst ? `<div class="formula subst"><span class="formula-rotulo">Com os seus valores</span><div>${p.subst}</div></div>` : ""}
+      ${p.tabela ? `<div class="tabela-rolagem">${p.tabela}</div>` : ""}
+      ${p.resultado ? `<p class="passo-resultado">Resultado: <strong>${p.resultado}</strong></p>` : ""}
+      ${p.ref ? `<p class="sub">${h(p.ref)}</p>` : ""}
+    </li>`).join("")}</ol>`;
 }
 
 function renderHistorico() {
@@ -526,7 +543,7 @@ async function salvarCalculo() {
   const c = CALCULADORAS.find((x) => x.id === S.calcId), r = S.calcAtual;
   if (!r?.linhas.length) return toast("Não há resultado para salvar.", "erro");
   const rotulos = Object.fromEntries(c.campos.map((f) => [f.id, f]));
-  const entradas = Object.entries(r.valores).map(([k, v]) => {
+  const entradas = Object.entries(r.valores).filter(([k]) => !rotulos[k].se || rotulos[k].se(r.valores)).map(([k, v]) => {
     const f = rotulos[k];
     const texto = f.tipo === "sel" ? f.opcoes.find(([o]) => String(o) === String(v))?.[1] ?? v : `${fmt(v, 3)}${f.unidade ? " " + f.unidade : ""}`;
     return { k: f.rotulo, v: String(texto) };
@@ -725,6 +742,8 @@ function prepararEventos() {
     const el = ev.target.closest("[data-calc]");
     if (!el) return;
     S.calcValores[S.calcId][el.dataset.calc] = el.value;
+    const def = CALCULADORAS.find((x) => x.id === S.calcId).campos.find((f) => f.id === el.dataset.calc);
+    if (def?.rerender) return renderCalculos(); // campos dependentes aparecem/somem
     renderResultadoCalc();
   });
   $("aba-calculos").addEventListener("change", (ev) => {

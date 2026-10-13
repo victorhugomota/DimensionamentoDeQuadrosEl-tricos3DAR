@@ -20,7 +20,12 @@ export const CALCULADORAS = [
     id: "cabo", nome: "Seção de cabo", norma: `${N.REFERENCIAS.ampacidade}; ${N.REFERENCIAS.queda}`,
     descricao: "Capacidade de condução, queda de tensão, seção mínima e coordenação com a proteção.",
     campos: [
-      num("corrente", "Corrente de projeto (IB)", 25, "A"), sel("tensao", "Tensão", TENSOES, 380), sel("fases", "Sistema", SISTEMAS, 3),
+      sel("modo", "Dado de entrada", [["corrente", "Corrente de operação"], ["potencia", "Potência (rede trifásica)"]], "corrente", { rerender: true }),
+      num("corrente", "Corrente de operação (IB)", 25, "A", { se: (v) => v.modo !== "potencia" }),
+      num("potencia", "Potência da carga", 15, "", { se: (v) => v.modo === "potencia" }),
+      sel("unidadePot", "Unidade", [["kW", "kW"], ["cv", "cv"]], "kW", { se: (v) => v.modo === "potencia" }),
+      num("rend", "Rendimento (η)", 0.9, "", { passo: 0.01, se: (v) => v.modo === "potencia" }),
+      sel("tensao", "Tensão", TENSOES, 380), sel("fases", "Sistema", SISTEMAS, 3, { se: (v) => v.modo !== "potencia" }),
       num("comprimento", "Comprimento do circuito", 50, "m"), num("cosfi", "Fator de potência", 0.85, "", { passo: 0.01 }),
       sel("isolacao", "Isolação", ISOLACOES, "PVC"), sel("metodo", "Método de instalação", METODOS, "B1", { largo: true }),
       num("tempAmbiente", "Temperatura ambiente", 30, "°C"), num("agrupamento", "Circuitos agrupados", 1, "circ."),
@@ -28,13 +33,87 @@ export const CALCULADORAS = [
       num("protecao", "Disjuntor previsto (0 = não verificar)", 0, "A")
     ],
     calcular(v) {
-      const r = N.dimensionarCabo({ ...v, fases: v.fases === 3 ? 3 : 2 });
+      const porPotencia = v.modo === "potencia";
+      const fases = porPotencia || v.fases === 3 ? 3 : 2;
+      const kW = v.unidadePot === "cv" ? v.potencia * CV : v.potencia;
+      const corrente = porPotencia ? (kW * 1000) / (Math.sqrt(3) * v.tensao * v.cosfi * v.rend) : v.corrente;
+      if (!(corrente > 0) || !Number.isFinite(corrente)) return { linhas: [], alertas: ["Informe a corrente ou a potência, a tensão, o fator de potência e o rendimento com valores maiores que zero."], passos: [] };
+      const r = N.dimensionarCabo({ ...v, corrente, fases });
       const alertas = [];
       if (r.excede) alertas.push("Nenhuma seção até 300 mm² atende: utilize condutores em paralelo ou reveja o método de instalação.");
-      if (v.protecao > 0 && v.protecao < v.corrente) alertas.push("O disjuntor previsto é menor que a corrente de projeto (IB ≤ In não atendido).");
+      if (v.protecao > 0 && v.protecao < corrente) alertas.push("O disjuntor previsto é menor que a corrente de projeto (IB ≤ In não atendido).");
+
+      // ---- memória de cálculo visual (HTML só com textos fixos e números) ----
+      const k = fases === 3 ? "√3" : "2";
+      const kNum = fases === 3 ? Math.sqrt(3) : 2;
+      const sen = Math.sqrt(Math.max(0, 1 - v.cosfi ** 2));
+      const R = N.resistencia(r.secao, v.isolacao), X = N.reatancia(r.secao);
+      const tab = N.AMPACIDADE[v.isolacao][v.metodo][r.nCond];
+      const iAdot = N.SECOES.indexOf(r.secao);
+      const linhasTab = N.SECOES.slice(0, Math.min(N.SECOES.length, iAdot + 3)).map((s, i) => {
+        const iz = tab[i] * r.k1 * r.k2;
+        const q = v.comprimento > 0 ? (N.quedaTensao({ corrente, comprimento: v.comprimento, secao: s, cosfi: v.cosfi, fases, isolacao: v.isolacao }) / v.tensao) * 100 : 0;
+        const uso = (corrente / iz) * 100;
+        const okI = iz >= corrente && (!(v.protecao > 0) || iz >= v.protecao), okQ = q <= v.quedaMax, okMin = s >= r.secaoMinima;
+        return `<tr class="${s === r.secao ? "adotada" : ""}"><td><strong>${f(s)} mm²</strong></td><td class="num">${f(tab[i], 1)} A</td><td class="num">${f(iz, 1)} A</td>
+          <td><span class="barra-uso"><i class="${uso <= 100 ? "ok" : "nok"}" style="width:${Math.min(100, uso).toFixed(0)}%"></i></span> <small>${f(uso, 0)}%</small></td>
+          <td class="num ${okQ ? "" : "txt-nok"}">${f(q)} %</td>
+          <td>${okI && okQ && okMin ? `<span class="chip ok">atende</span>` : `<span class="chip nok">${!okI ? "corrente" : !okQ ? "queda" : "mínima"}</span>`}</td></tr>`;
+      }).join("");
+      const frac = (a, b) => `<span class="frac"><span>${a}</span><span>${b}</span></span>`;
+      const memoria = [];
+      if (porPotencia) memoria.push({
+        titulo: "Corrente de projeto a partir da potência",
+        texto: "Em rede trifásica, a corrente de linha é a potência ativa dividida pela tensão de linha, pelo fator de potência e pelo rendimento da carga.",
+        formula: `I<sub>B</sub> = ${frac("P", "√3 · V · cosφ · η")}`,
+        subst: `I<sub>B</sub> = ${frac(`${f(kW * 1000, 0)} W`, `1,732 × ${v.tensao} V × ${f(v.cosfi)} × ${f(v.rend)}`)}`,
+        resultado: `${f(corrente)} A`, ref: v.unidadePot === "cv" ? `Conversão: ${f(v.potencia)} cv × 0,7355 = ${f(kW)} kW` : ""
+      });
+      memoria.push({
+        titulo: "Fatores de correção",
+        texto: `A capacidade tabelada vale para 30 °C${v.metodo === "D" ? " no ar e 20 °C no solo" : ""} e um único circuito. Temperatura maior e circuitos agrupados reduzem a corrente que o cabo suporta.`,
+        formula: `k<sub>1</sub> = f(temperatura, isolação) &nbsp;·&nbsp; k<sub>2</sub> = f(nº de circuitos, método)`,
+        subst: `k<sub>1</sub> = ${f(r.k1)} <small>(${f(v.tempAmbiente)} °C, ${v.isolacao})</small> &nbsp;·&nbsp; k<sub>2</sub> = ${f(r.k2)} <small>(${f(v.agrupamento, 0)} circuito${v.agrupamento > 1 ? "s" : ""}, método ${v.metodo})</small>`,
+        resultado: `k = ${f(r.k1 * r.k2, 3)}`, ref: `${N.REFERENCIAS.temperatura}; ${N.REFERENCIAS.agrupamento}`
+      });
+      memoria.push({
+        titulo: "Capacidade de condução de corrente",
+        texto: `A corrente admissível corrigida (I<sub>Z</sub>′) precisa ser maior ou igual à corrente de projeto. Tabela para ${r.nCond} condutores carregados, método ${v.metodo}, isolação ${v.isolacao}.`,
+        formula: `I<sub>Z</sub>′ = I<sub>Z</sub> · k<sub>1</sub> · k<sub>2</sub> ≥ I<sub>B</sub>`,
+        subst: `I<sub>Z</sub>′ = ${f(r.izTabela, 1)} × ${f(r.k1)} × ${f(r.k2)} = ${f(r.iz, 1)} A ${r.iz >= corrente ? "≥" : "&lt;"} ${f(corrente)} A`,
+        resultado: r.porAmpacidade ? `mínimo ${f(r.porAmpacidade)} mm²` : "acima de 300 mm²", ok: r.iz >= corrente, ref: N.REFERENCIAS.ampacidade
+      });
+      if (v.comprimento > 0) memoria.push({
+        titulo: "Queda de tensão",
+        texto: `A queda no trecho depende da corrente, do comprimento e da impedância do cabo (resistência a ${N.TEMP_SERVICO[v.isolacao]} °C e reatância). O limite escolhido é ${f(v.quedaMax)} %.`,
+        formula: `ΔV = ${k} · I · L · (R·cosφ + X·senφ) &nbsp;&nbsp;&nbsp; ΔV% = ${frac("ΔV", "V")} · 100`,
+        subst: `ΔV = ${f(kNum, 3)} × ${f(corrente)} A × ${f(v.comprimento / 1000, 3)} km × (${f(R, 3)} × ${f(v.cosfi)} + ${f(X, 3)} × ${f(sen, 3)}) = ${f(r.quedaV, 2)} V<br>ΔV% = ${frac(`${f(r.quedaV, 2)} V`, `${v.tensao} V`)} · 100 = ${f(r.quedaPct)} %`,
+        resultado: r.porQueda ? `mínimo ${f(r.porQueda)} mm²` : "acima de 300 mm²", ok: r.quedaPct <= v.quedaMax,
+        ref: `${N.REFERENCIAS.queda} · R = ${f(R, 3)} Ω/km e X = ${f(X, 3)} Ω/km para ${f(r.secao)} mm²`
+      });
+      if (v.protecao > 0) memoria.push({
+        titulo: "Coordenação com a proteção",
+        texto: "O disjuntor deve estar entre a corrente de projeto e a capacidade do cabo, para proteger o condutor contra sobrecarga.",
+        formula: `I<sub>B</sub> ≤ I<sub>n</sub> ≤ I<sub>Z</sub>′`,
+        subst: `${f(corrente)} A ≤ ${f(v.protecao)} A ≤ ${f(r.iz, 1)} A`,
+        resultado: r.porProtecao ? `mínimo ${f(r.porProtecao)} mm²` : "acima de 300 mm²", ok: corrente <= v.protecao && v.protecao <= r.iz, ref: N.REFERENCIAS.sobrecarga
+      });
+      memoria.push({
+        titulo: "Comparação das seções", texto: "Cada seção é testada nos critérios acima; a adotada é a menor que atende a todos. A barra mostra quanto da capacidade corrigida a corrente de projeto ocupa.",
+        tabela: `<table class="comparacao"><thead><tr><th>Seção</th><th class="num">I<sub>Z</sub> tabela</th><th class="num">I<sub>Z</sub>′ corrigida</th><th>Carregamento</th><th class="num">Queda</th><th>Situação</th></tr></thead><tbody>${linhasTab}</tbody></table>`
+      });
+      memoria.push({
+        titulo: "Seção adotada e condutores complementares",
+        texto: "Adota-se a maior seção entre os critérios. O condutor de proteção segue a seção das fases até 16 mm², fica em 16 mm² até 35 mm² e passa à metade acima disso.",
+        formula: `S = máx( S<sub>corrente</sub> ; S<sub>queda</sub> ; S<sub>proteção</sub> ; S<sub>mínima</sub> )`,
+        subst: `S = máx( ${[r.porAmpacidade, v.comprimento > 0 ? r.porQueda : null, v.protecao > 0 ? r.porProtecao : null, r.secaoMinima].filter((x) => x != null).map((x) => f(x)).join(" ; ")} ) mm²`,
+        resultado: `${f(r.secao)} mm² · PE ${f(r.pe)} mm²`, ok: !r.excede, ref: `${N.REFERENCIAS.secaoMinima}; ${N.REFERENCIAS.pe}`
+      });
+
       return {
         linhas: [
           ["Seção adotada (fases)", `${f(r.secao)} mm²`, true], ["Critério determinante", r.criterio],
+          ["Corrente de projeto (IB)", `${f(corrente)} A${porPotencia ? ` — calculada de ${f(kW)} kW, trifásico` : ""}`],
           ["Por capacidade de condução", r.porAmpacidade ? `${f(r.porAmpacidade)} mm²` : "acima de 300 mm²"],
           ["Por queda de tensão", r.porQueda ? `${f(r.porQueda)} mm²` : "acima de 300 mm²"],
           ["Seção mínima (força)", `${f(r.secaoMinima)} mm²`],
@@ -42,8 +121,7 @@ export const CALCULADORAS = [
           ["Capacidade corrigida (Iz')", `${f(r.iz, 1)} A`], ["Queda de tensão", `${f(r.quedaPct)} % (${f(r.quedaV, 1)} V)`],
           ["Condutor de proteção (PE)", `${f(r.pe)} mm²`], ["Neutro (sem harmônicas)", `${f(r.neutro)} mm²`]
         ],
-        alertas,
-        passos: [`Iz' = Iz × k1 × k2 = ${f(r.izTabela, 1)} × ${f(r.k1)} × ${f(r.k2)} = ${f(r.iz, 1)} A ≥ IB = ${f(v.corrente)} A`, `ΔV = ${v.fases === 3 ? "√3" : "2"} · I · L · (R·cosφ + X·senφ) = ${f(r.quedaV, 1)} V`]
+        alertas, passos: [], memoria
       };
     }
   },

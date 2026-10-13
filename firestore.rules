@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Administrador do sistema (mesmo e-mail de js/firebase.js).
+    function ehAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'eletrica@3darcondicionado.com.br';
+    }
+
+    // Usuário com cadastro aprovado pelo administrador.
+    function aprovado() {
+      return ehAdmin() || (
+        request.auth != null
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.status == 'aprovado'
+      );
+    }
+
+    // Cadastro: cada pessoa cria o próprio registro como "pendente" e só o
+    // administrador aprova, bloqueia ou exclui.
+    match /usuarios/{uid} {
+      allow read: if ehAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow create: if request.auth != null && request.auth.uid == uid && (
+        ehAdmin() || (
+          request.resource.data.status == 'pendente'
+          && request.resource.data.role == 'usuario'
+          && request.resource.data.email == request.auth.token.email
+        )
+      );
+      allow update: if ehAdmin() || (
+        request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'ultimoAcesso'])
+      );
+      allow delete: if ehAdmin();
+    }
+
+    // Quadros e cálculos: compartilhados entre todos os usuários aprovados.
+    match /quadros/{id} {
+      allow read, write: if aprovado();
+    }
+    match /calculos/{id} {
+      allow read, write: if aprovado();
+    }
+  }
+}

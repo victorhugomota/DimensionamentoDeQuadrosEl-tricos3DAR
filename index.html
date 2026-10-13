@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dimensionamento de Quadros Elétricos — 3D AR</title>
+  <meta name="description" content="Dimensionamento e lista de materiais de quadros elétricos de automação e potência (HVAC e indústria), conforme NBR 5410.">
+  <link rel="icon" href="./assets/icone.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+
+  <!-- Carregando -->
+  <div id="telaCarregando" class="centro">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>Conectando…</p>
+  </div>
+
+  <!-- Login / solicitação de acesso -->
+  <main id="telaLogin" class="centro" hidden>
+    <section class="cartao login">
+      <img src="./assets/icone.svg" alt="" class="login-logo" width="56" height="56">
+      <h1>Dimensionamento de Quadros Elétricos</h1>
+      <p class="sub">Automação e potência — 3D Ar Condicionado</p>
+      <div class="abas-login" role="tablist">
+        <button type="button" data-modo="entrar" class="ativo" role="tab">Entrar</button>
+        <button type="button" data-modo="solicitar" role="tab">Solicitar acesso</button>
+      </div>
+      <form id="formLogin" autocomplete="on">
+        <label id="campoNome" hidden>Nome completo
+          <input type="text" id="loginNome" autocomplete="name">
+        </label>
+        <label>E-mail
+          <input type="email" id="loginEmail" autocomplete="username" required>
+        </label>
+        <label>Senha
+          <input type="password" id="loginSenha" autocomplete="current-password" minlength="6" required>
+        </label>
+        <p id="loginAviso" class="nota" hidden>Sua solicitação será enviada ao administrador. O acesso é liberado após a aprovação.</p>
+        <p id="loginErro" class="erro" role="alert" hidden></p>
+        <button type="submit" class="btn btn-primario btn-bloco" id="btnLogin">Entrar</button>
+        <button type="button" class="btn-link" id="btnEsqueci">Esqueci minha senha</button>
+      </form>
+    </section>
+  </main>
+
+  <!-- Aguardando aprovação / bloqueado -->
+  <main id="telaEspera" class="centro" hidden>
+    <section class="cartao login">
+      <h1 id="esperaTitulo">Aguardando aprovação</h1>
+      <p id="esperaTexto" class="sub"></p>
+      <button type="button" class="btn" id="btnSairEspera">Sair</button>
+    </section>
+  </main>
+
+  <!-- Aplicação -->
+  <div id="app" hidden>
+    <header class="topo">
+      <div class="marca">
+        <img src="./assets/icone.svg" alt="" width="34" height="34">
+        <div>
+          <strong>Quadros Elétricos</strong>
+          <span class="sub">3D Ar Condicionado</span>
+        </div>
+      </div>
+      <nav class="abas" id="abas">
+        <button type="button" data-aba="quadros" class="ativo">Quadros</button>
+        <button type="button" data-aba="calculos">Cálculos</button>
+        <button type="button" data-aba="base">Normas e base</button>
+        <button type="button" data-aba="admin" id="abaAdminBtn" hidden>Administração <span id="badgePendentes" class="badge" hidden></span></button>
+      </nav>
+      <div class="usuario">
+        <span id="usuarioNome"></span>
+        <button type="button" class="btn btn-pequeno" id="btnSair">Sair</button>
+      </div>
+    </header>
+
+    <main class="conteudo">
+      <section id="aba-quadros"></section>
+      <section id="aba-calculos" hidden></section>
+      <section id="aba-base" hidden></section>
+      <section id="aba-admin" hidden></section>
+    </main>
+  </div>
+
+  <dialog id="dlgEquip" class="dialogo"></dialog>
+  <dialog id="dlgLinhas" class="dialogo"></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

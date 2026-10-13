@@ -16,6 +16,7 @@ const ERROS = {
   "auth/weak-password": "A senha precisa ter pelo menos 6 caracteres.",
   "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
   "auth/network-request-failed": "Sem conexão com o servidor. Verifique a internet.",
+  "auth/configuration-not-found": "O Authentication ainda não foi ativado no projeto Firebase. No console: Authentication → Vamos começar → Sign-in method → E-mail/senha → Ativar.",
   "auth/operation-not-allowed": "O login por e-mail/senha ainda não foi ativado no console do Firebase (Authentication → Sign-in method).",
   "permission-denied": "Sem permissão para esta operação. Verifique se as regras do Firestore foram publicadas."
 };

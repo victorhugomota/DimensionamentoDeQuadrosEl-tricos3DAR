@@ -469,7 +469,8 @@ function renderCalculos() {
         </div>
         <div class="cartao">
           <div class="barra"><h3>Histórico de cálculos</h3><span class="espaco"></span>
-            <select id="filtroHist" aria-label="Filtrar histórico"></select></div>
+            <select id="filtroHist" aria-label="Filtrar histórico"></select>
+            <button type="button" class="btn btn-pequeno btn-perigo" id="btnLimparHist" data-acao="limpar-hist">Apagar exibidos</button></div>
           <div id="historico"></div>
         </div>
       </div>
@@ -494,7 +495,7 @@ function renderResultadoCalc() {
 
 function renderHistorico() {
   if (!$("historico")) return;
-  const doQuadro = S.quadros.flatMap((q) => (q.memorial ?? []).map((m) => ({ ...m, origem: "quadro", quadroId: q.id, quadroNome: q.nome, quando: q.geradoEm })));
+  const doQuadro = S.quadros.flatMap((q) => (q.memorial ?? []).map((m, indice) => ({ ...m, indice, origem: "quadro", quadroId: q.id, quadroNome: q.nome, quando: q.geradoEm })));
   const salvos = S.calculos.map((c) => ({ ...c, origem: c.quadroId ? "vinculado" : "avulso", quadroNome: S.quadros.find((q) => q.id === c.quadroId)?.nome, quando: c.criadoEm }));
   const filtro = $("filtroHist");
   filtro.innerHTML = opcoes([["todos", "Todos"], ["avulsos", "Somente avulsos"], ...S.quadros.map((q) => [q.id, `Quadro ${q.nome}`])], S.filtroHist);
@@ -503,11 +504,22 @@ function renderHistorico() {
   $("historico").innerHTML = itens.length ? itens.map((i) => `
     <details><summary><span>${h(i.titulo)}</span>
       <span class="etiqueta ${i.origem}">${i.origem === "avulso" ? "Avulso" : h(i.quadroNome ?? "Quadro")}${i.origem === "quadro" ? " · automático" : ""}</span>
-      <span class="sub">${data(i.quando)}</span></summary>
+      <span class="sub">${data(i.quando)}</span>
+      <button type="button" class="btn btn-pequeno btn-perigo" title="Apagar este cálculo" aria-label="Apagar este cálculo" ${i.origem === "quadro" ? `data-acao="excluir-memorial" data-id="${h(i.quadroId)}" data-i="${i.indice}"` : `data-acao="excluir-calc" data-id="${h(i.id)}"`}>✕</button></summary>
       <div class="memo"><div><h5>Entradas</h5>${tabelaPares(i.entradas)}</div><div><h5>Resultados</h5>${tabelaPares(i.resultados)}</div></div>
-      <p class="sub">Referência: ${h(i.norma ?? "—")}${i.criadoPor ? ` · por ${h(i.criadoPor)}` : ""}
-        ${i.origem !== "quadro" ? ` <button type="button" class="btn-link perigo" data-acao="excluir-calc" data-id="${h(i.id)}">Excluir</button>` : ""}</p>
+      <p class="sub">Referência: ${h(i.norma ?? "—")}${i.criadoPor ? ` · por ${h(i.criadoPor)}` : ""}</p>
     </details>`).join("") : `<p class="vazio sub">Nenhum cálculo registrado neste filtro.</p>`;
+  S.histVisivel = itens;
+  $("btnLimparHist").hidden = !itens.length;
+}
+
+// Remove cálculos automáticos (memorial) de um quadro, sem alterar o restante dele.
+async function apagarMemorial(quadroId, indices) {
+  const q = S.quadros.find((x) => x.id === quadroId);
+  if (!q) return;
+  const memorial = (q.memorial ?? []).filter((_, i) => !indices.includes(i));
+  await store.atualizar("quadros", quadroId, { memorial });
+  if (S.quadro?.id === quadroId) S.quadro.memorial = memorial;
 }
 
 async function salvarCalculo() {
@@ -637,6 +649,23 @@ const ACOES = {
     if (!confirm("Excluir este cálculo do histórico?")) return;
     try { await store.remover("calculos", el.dataset.id); } catch (e) { toast(store.mensagemErro(e), "erro"); }
   },
+  "excluir-memorial": async (el) => {
+    if (!confirm("Apagar este cálculo do histórico do quadro? Ele volta a ser registrado se a lista for gerada novamente.")) return;
+    try { await apagarMemorial(el.dataset.id, [Number(el.dataset.i)]); } catch (e) { toast(store.mensagemErro(e), "erro"); }
+  },
+  "limpar-hist": async () => {
+    const itens = S.histVisivel ?? [];
+    if (!itens.length || !confirm(`Apagar os ${itens.length} cálculos exibidos neste filtro? Esta ação não pode ser desfeita.`)) return;
+    try {
+      const porQuadro = {};
+      for (const i of itens) {
+        if (i.origem === "quadro") (porQuadro[i.quadroId] ??= []).push(i.indice);
+        else await store.remover("calculos", i.id);
+      }
+      for (const [id, indices] of Object.entries(porQuadro)) await apagarMemorial(id, indices);
+      toast("Cálculos apagados.");
+    } catch (e) { toast(store.mensagemErro(e), "erro"); }
+  },
   usuario: async (el) => {
     try {
       await store.atualizar("usuarios", el.dataset.id, { status: el.dataset.status, avaliadoPor: S.usuario.email, avaliadoEm: store.agora() });
@@ -650,11 +679,16 @@ const ACOES = {
 };
 
 function prepararEventos() {
-  $("abas").addEventListener("click", (ev) => { const b = ev.target.closest("[data-aba]"); if (b) trocarAba(b.dataset.aba); });
+  $("abas").addEventListener("click", (ev) => { const b = ev.target.closest("[data-aba]"); if (!b) return;
+    if (b.dataset.aba === "quadros") { S.quadro = null; S.resultado = null; }
+    trocarAba(b.dataset.aba);
+  });
 
   document.addEventListener("click", (ev) => {
     const el = ev.target.closest("[data-acao]");
-    if (el && ACOES[el.dataset.acao]) ACOES[el.dataset.acao](el);
+    if (!el || !ACOES[el.dataset.acao]) return;
+    if (el.closest("summary")) ev.preventDefault(); // botão dentro do título não abre/fecha o item
+    ACOES[el.dataset.acao](el);
   });
 
   // Dados do painel
